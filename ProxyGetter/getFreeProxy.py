@@ -3,30 +3,23 @@
 """
 -------------------------------------------------
    File Name：     GetFreeProxy.py
-   Description :  抓取免费代理
+   Description :  通过关键字扫描censys.io中的疑似的代理IP
    Author :       JHao
    date：          2016/11/25
 -------------------------------------------------
    Change Activity:
-                   2016/11/25:
+                   2017/06/15: 通过关键字扫描censys.io中的疑似ip
 -------------------------------------------------
 """
-import re
-import requests
 
-try:
-    from importlib import reload  # py3 实际不会实用，只是为了不显示语法错误
-except:
-    import sys  # py2
+from Util.LogHandler import LogHandler
+from Util.utilFunction import getHtmlTree
 
-    reload(sys)
-    sys.setdefaultencoding('utf-8')
+API_URL = "https://www.censys.io/ipv4/_search?q={k}&page={p}"
 
-from Util.utilFunction import robustCrawl, getHtmlTree
-from Util.WebRequest import WebRequest
+KEY_WORD = ['Squid', 'CCProxy', 'Tinyproxy', 'Wingate', 'Pound', 'Proxy', 'Mikrotik']
 
-# for debug to disable insecureWarning
-requests.packages.urllib3.disable_warnings()
+PORT = [8080, 3128, 8123, 80, 8081]
 
 
 class GetFreeProxy(object):
@@ -35,100 +28,28 @@ class GetFreeProxy(object):
     """
 
     def __init__(self):
-        pass
+        self.log = LogHandler('get_free_proxy')
 
     @staticmethod
-    @robustCrawl  # decoration print error if exception happen
-    def freeProxyFirst(page=10):
+    def censys_scanner():
         """
-        抓取无忧代理 http://www.data5u.com/
-        :param page: 页数
+        根据关键字搜索ip
         :return:
         """
-        url_list = ['http://www.data5u.com/',
-                    'http://www.data5u.com/free/',
-                    'http://www.data5u.com/free/gngn/index.shtml',
-                    'http://www.data5u.com/free/gnpt/index.shtml']
-        for url in url_list:
-            html_tree = getHtmlTree(url)
-            ul_list = html_tree.xpath('//ul[@class="l2"]')
-            for ul in ul_list:
-                yield ':'.join(ul.xpath('.//li/text()')[0:2])
-
-    @staticmethod
-    @robustCrawl
-    def freeProxySecond(proxy_number=100):
-        """
-        抓取代理66 http://www.66ip.cn/
-        :param proxy_number: 代理数量
-        :return:
-        """
-        url = "http://www.66ip.cn/mo.php?sxb=&tqsl={}&port=&export=&ktip=&sxa=&submit=%CC%E1++%C8%A1&textarea=".format(
-                proxy_number)
-        request = WebRequest()
-        html = request.get(url).content
-        for proxy in re.findall(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}', html):
-            yield proxy
-
-    @staticmethod
-    @robustCrawl
-    def freeProxyThird(days=1):
-        """
-        抓取ip181 http://www.ip181.com/
-        :param days:
-        :return:
-        """
-        url = 'http://www.ip181.com/'
-        html_tree = getHtmlTree(url)
-        tr_list = html_tree.xpath('//tr')[1:]
-        for tr in tr_list:
-            yield ':'.join(tr.xpath('./td/text()')[0:2])
-
-    @staticmethod
-    @robustCrawl
-    def freeProxyFourth():
-        """
-        抓取西刺代理 http://api.xicidaili.com/free2016.txt
-        :return:
-        """
-        url_list = ['http://www.xicidaili.com/nn',  # 高匿
-                    'http://www.xicidaili.com/nt',  # 透明
-                    ]
-        for each_url in url_list:
-            tree = getHtmlTree(each_url)
-            proxy_list = tree.xpath('.//table[@id="ip_list"]//tr')
-            for proxy in proxy_list:
-                yield ':'.join(proxy.xpath('./td/text()')[0:2])
-
-    @staticmethod
-    @robustCrawl
-    def freeProxyFifth():
-        """
-        抓取guobanjia http://www.goubanjia.com/free/gngn/index.shtml
-        :return:
-        """
-        url = "http://www.goubanjia.com/free/gngn/index{page}.shtml"
-        for page in range(1, 10):
-            page_url = url.format(page=page)
-            tree = getHtmlTree(page_url)
-            proxy_list = tree.xpath('//td[@class="ip"]')
-            for each_proxy in proxy_list:
-                yield ''.join(each_proxy.xpath('.//text()'))
+        for key in KEY_WORD:
+            for page in range(1, 11):
+                url = API_URL.format(k=key, p=page)
+                tree = getHtmlTree(url)
+                if not tree:
+                    continue
+                for ip in tree.xpath('//span[@class="dns"]/@id'):
+                    for port in PORT:
+                        yield '{ip}:{port}'.format(ip=ip, port=port)
+                from time import sleep
+                sleep(2)
 
 
 if __name__ == '__main__':
-    gg = GetFreeProxy()
-    # for e in gg.freeProxyFirst():
-    #     print e
-
-    # for e in gg.freeProxySecond():
-    #     print e
-
-    # for e in gg.freeProxyThird():
-    #     print e
-
-    for e in gg.freeProxyFourth():
-        print e
-
-        # for e in gg.freeProxyFifth():
-        #     print(e)
+    gfp = GetFreeProxy()
+    for each in gfp.censys_scanner():
+        print(each)
